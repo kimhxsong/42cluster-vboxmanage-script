@@ -1,0 +1,102 @@
+#!/bin/bash -i
+
+VM="$@"
+
+SATA="SATA1"
+IDE="IDE1"
+OS_TYPE="Debian_64"
+
+BASE_FOLDER="${PWD}/VM"
+
+VM_MEDIUM="${VM}.vdi"
+
+VM_MEDIUM_ISO=emptydrive
+# VM_MEDIUM_ISO="${PWD}/debian-11.3.0-amd64-netinst.iso"
+
+mkdir -p ${BASE_FOLDER};
+
+alias vbm=vBoxManage
+
+# set -eux;
+
+## 가상머신 생성
+vbm createvm \
+  --name ${VM} \
+  --basefolder ${BASE_FOLDER} \
+  --ostype ${OS_TYPE} \
+  --register \
+;
+
+## 컴퓨터 시스템 구성
+vbm modifyvm ${VM} \
+  --cpus 4 \
+  --memory 12288 \
+  --vram 16 \
+  --pae on \
+;
+
+## 인터페이스 구성
+vbm modifyvm ${VM} \
+  --audio none \
+  --mouse usbtablet \
+  --keyboard ps2 \
+;
+
+## 네트워크 어댑터 구성
+
+VBOX_HOST_NET=$(vbm hostonlyif create 2>/dev/null | awk -F "'" '{ print $2 }');
+
+vbm modifyvm ${VM} \
+  --nic1 nat \
+  --nic2 hostonly \
+  --hostonlyadapter2 ${VBOX_HOST_NET} \
+;
+
+
+## 가상 미디어 생성 ##
+vbm createmedium \
+  --filename ${BASE_FOLDER}/${VM}/${VM_MEDIUM} \
+  --size 10240 \
+  --variant standard \
+;
+
+
+## 가상머신 스토리지 생성 ##
+vbm storagectl ${VM} \
+  --name "${SATA}" \
+  --add sata \
+  --portcount 1 \
+  --bootable on \
+;
+
+vbm storagectl ${VM} \
+   --name "${IDE}" \
+   --add ide \
+   --bootable off \
+ ;
+
+
+## 가상 미디어 - 스토리지 연결 ##
+vbm storageattach "${VM}" \
+  --storagectl "${IDE}" \
+  --medium "${VM_MEDIUM_ISO}" \
+  --type dvddrive \
+  --port 0 \
+  --device 0 \
+  --setuuid "" \
+;
+
+VBoxManage storageattach "${VM}" \
+  --storagectl "${SATA}" \
+  --port 0 \
+  --device 0 \
+  --type hdd \
+  --medium "${BASE_FOLDER}/${VM}/${VM_MEDIUM}" \
+  --setuuid "" \
+;
+
+
+## 포트 포워딩 ##
+vbm modifyvm "${VM}" \
+  --natpf1 "guestssh,tcp,,2222,,22" \
+;

@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+
+SAVEIFS=$IFS    # save old IFS value
+IFS=$'\n'       # make newlines the only separator
+echo "Powering off all running VMs"
+for vm in $(VBoxManage list runningvms | awk '{print substr($2, 2, length($2) - 2)}') # you might want to limit your search by `| grep 'some vm name here' ` *before* the pipe to awk 
+do
+echo "Powering off VM ${vm}"
+VBoxManage controlvm ${vm} poweroff
+echo "VM ${vm} powered off"
+done
+
+echo "Getting rid of any left over CI vagrant VMs"
+for vvm in $(VBoxManage list vms) # you might want to limit your search by `| grep 'some vm name here' `
+do
+echo "Cleaning up VM ${vvm}"
+vm_id=$(echo "${vvm}" | awk '{print substr($2, 2, length($2) - 2)}')
+vm_name=$(echo "${vvm}" | awk '{print substr($1, 2, length($1) - 2)}')
+
+echo "powering off vm id ${vm_id}"
+VBoxManage controlvm ${vm_id} poweroff
+
+echo "unregistering vm id ${vm_id}"
+VBoxManage unregistervm ${vm_id}
+
+echo "deleting vm ${vm_name} from disk"
+rm -rf ~jenkins/VirtualboxVMs/${vm_name}
+
+echo "VM ${vm} powered off and deleted"
+done
+
+IFS=$SAVEIFS    # restore IFS value
+
+# from: https://gist.github.com/gsaslis/1f76790c02a9cfdc0803e49cb5278c7a
+
+hostonlyifs="$(vboxmanage list hostonlyifs | grep " vboxnet" | awk '{ print $2 }' | tr '\n' ' ')"
+
+for hostonlyif in ${hostonlyifs}
+do
+  vBoxManage hostonlyif remove ${hostonlyif}
+done
+
+
+
+
+
